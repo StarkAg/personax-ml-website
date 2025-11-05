@@ -93,6 +93,42 @@ PersonaX ML WebSite/
 2. Open `index.html` in your browser to view the landing page
 3. Open `dashboard.html` to view the interactive dashboard
 
+## Using the Dashboard
+
+### CSV Format Requirements
+
+Your CSV file should contain transaction data with the following columns (column names are auto-detected):
+
+- **Customer ID**: Column containing unique customer identifiers (e.g., `CustomerID`, `Customer`, `ID`)
+- **Date**: Column containing transaction dates (e.g., `InvoiceDate`, `Date`, `PurchaseDate`) - Format: YYYY-MM-DD or MM/DD/YYYY
+- **Amount**: Column containing transaction amounts (e.g., `Amount`, `Price`, `Total`, `Revenue`)
+
+### Example CSV Format
+
+```csv
+CustomerID,InvoiceDate,Amount
+C001,2024-01-15,125.50
+C001,2024-02-20,89.99
+C002,2024-01-05,56.75
+```
+
+### Steps to Generate Graphs
+
+1. **Upload CSV**: Click "Load Customer Data" and select your CSV file
+2. **Calculate RFM**: The system automatically calculates RFM scores (Recency, Frequency, Monetary)
+3. **Run Clustering**: Click "Run Clustering" to perform K-Means clustering analysis
+4. **View Results**: All charts will update automatically with your data:
+   - 3D RFM Scatter Plot
+   - PCA 2D Visualization
+   - Elbow Method Chart
+   - Silhouette Score Analysis
+   - Customer Segments Distribution
+   - RFM Heatmap
+
+### Sample Data
+
+A sample CSV file (`sample_data.csv`) is included in the repository for testing purposes.
+
 ## Development
 
 The website is a static site that can be run locally by simply opening the HTML files in a browser, or by using a local server:

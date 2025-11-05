@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Persona Dashboard - Interactive Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .dashboard-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .dashboard-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .filter-active {
+            background-color: #2563eb;
+            color: white;
+        }
+        .chart-container {
+            position: relative;
+            height: 500px;
+            width: 100%;
+        }
+        .chart-container-3d {
+            height: 600px;
+        }
+        .chart-container-small {
+            height: 400px;
+        }
+        .loading {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        .sidebar {
+            transition: all 0.3s ease;
+        }
+        .sidebar.collapsed {
+            width: 60px;
+        }
+        .sidebar.collapsed .sidebar-content {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <a href="index.html" class="text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Project
+                </a>
+                <h1 class="text-2xl font-bold text-gray-800">Customer Persona Dashboard</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="toggleSidebar" class="p-2 rounded-lg hover:bg-gray-100">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <button id="exportBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                    <i class="fas fa-download mr-2"></i>Export Report
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar bg-white shadow-lg w-80 overflow-y-auto">
+            <div class="sidebar-content p-6">
+                <!-- Data Upload Section -->
+                <div class="dashboard-card p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-upload mr-2"></i>Data Upload
+                    </h3>
+                    <div class="space-y-4">
+                        <input type="file" id="csvFile" accept=".csv" class="w-full p-2 border rounded-lg">
+                        <button id="loadData" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700">
+                            <i class="fas fa-database mr-2"></i>Load Customer Data
+                        </button>
+                        <div id="dataInfo" class="text-sm text-gray-600 hidden">
+                            <p>Loaded: <span id="rowCount">0</span> customers</p>
+                            <p>Columns: <span id="columnCount">0</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RFM Parameters -->
+                <div class="dashboard-card p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-sliders-h mr-2"></i>RFM Parameters
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Recency Days</label>
+                            <input type="number" id="recencyDays" value="30" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Frequency Threshold</label>
+                            <input type="number" id="frequencyThreshold" value="5" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Monetary Threshold</label>
+                            <input type="number" id="monetaryThreshold" value="100" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <button id="calculateRFM" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-calculator mr-2"></i>Calculate RFM
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Clustering Options -->
+                <div class="dashboard-card p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-project-diagram mr-2"></i>Clustering
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Number of Clusters</label>
+                            <input type="number" id="numClusters" value="4" min="2" max="10" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <button id="runClustering" class="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700">
+                            <i class="fas fa-brain mr-2"></i>Run Clustering
+                        </button>
+                        <button id="refreshCharts" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 mt-2">
+                            <i class="fas fa-sync-alt mr-2"></i>Refresh All Charts
+                        </button>
+                        <button id="loadAllCharts" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 mt-2">
+                            <i class="fas fa-chart-bar mr-2"></i>Load All Charts
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="dashboard-card p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-filter mr-2"></i>Filters
+                    </h3>
+                    <div class="space-y-3">
+                        <button class="filter-btn w-full text-left p-2 rounded-lg border hover:bg-gray-50" data-filter="all">
+                            <i class="fas fa-users mr-2"></i>All Customers
+                        </button>
+                        <button class="filter-btn w-full text-left p-2 rounded-lg border hover:bg-gray-50" data-filter="high-value">
+                            <i class="fas fa-crown mr-2"></i>High Value
+                        </button>
+                        <button class="filter-btn w-full text-left p-2 rounded-lg border hover:bg-gray-50" data-filter="at-risk">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>At Risk
+                        </button>
+                        <button class="filter-btn w-full text-left p-2 rounded-lg border hover:bg-gray-50" data-filter="new">
+                            <i class="fas fa-seedling mr-2"></i>New Customers
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-y-auto p-6">
+            <!-- Metrics Overview -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="metric-card p-6 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-100">Total Customers</p>
+                            <p class="text-3xl font-bold" id="totalCustomers">0</p>
+                        </div>
+                        <i class="fas fa-users text-3xl text-blue-200"></i>
+                    </div>
+                </div>
+                <div class="metric-card p-6 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-100">High Value</p>
+                            <p class="text-3xl font-bold" id="highValueCustomers">0</p>
+                        </div>
+                        <i class="fas fa-crown text-3xl text-blue-200"></i>
+                    </div>
+                </div>
+                <div class="metric-card p-6 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-100">At Risk</p>
+                            <p class="text-3xl font-bold" id="atRiskCustomers">0</p>
+                        </div>
+                        <i class="fas fa-exclamation-triangle text-3xl text-blue-200"></i>
+                    </div>
+                </div>
+                <div class="metric-card p-6 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-100">Avg. Value</p>
+                            <p class="text-3xl font-bold" id="avgCustomerValue">$0</p>
+                        </div>
+                        <i class="fas fa-dollar-sign text-3xl text-blue-200"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- RFM 3D Scatter Plot -->
+                <div class="dashboard-card p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-chart-scatter mr-2"></i>Customer Clusters (3D RFM)
+                    </h3>
+                    <div class="chart-container chart-container-3d">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
+                        </div>
+                        <div id="rfmChart"></div>
+                    </div>
+                </div>
+
+                <!-- PCA 2D Visualization -->
+                <div class="dashboard-card p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-chart-line mr-2"></i>Customer Clusters (PCA 2D)
+                    </h3>
+                    <div class="chart-container">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
+                        </div>
+                        <div id="pcaChart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clustering Analysis -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Elbow Method -->
+                <div class="dashboard-card p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-chart-line mr-2"></i>WCSS vs. Number of Clusters (Elbow Method)
+                    </h3>
+                    <div class="chart-container chart-container-small">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
+                        </div>
+                        <div id="elbowChart"></div>
+                    </div>
+                </div>
+
+                <!-- Silhouette Analysis -->
+                <div class="dashboard-card p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-chart-bar mr-2"></i>Silhouette Score vs. Number of Clusters
+                    </h3>
+                    <div class="chart-container chart-container-small">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
+                        </div>
+                        <div id="silhouetteChart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customer Segments Distribution -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Customer Segments Pie Chart -->
+                <div class="dashboard-card p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-chart-pie mr-2"></i>Customer Segments Distribution
+                    </h3>
+                    <div class="chart-container chart-container-small">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
+                        </div>
+                        <div id="segmentsChart"></div>
+                    </div>
+                </div>
+
+                <!-- RFM Heatmap -->
+                <div class="dashboard-card p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-th mr-2"></i>RFM Score Heatmap
+                    </h3>
+                    <div class="chart-container chart-container-small">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
+                        </div>
+                        <div id="heatmapChart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customer Personas Table -->
+            <div class="dashboard-card p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-table mr-2"></i>Customer Personas
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Customer ID</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Segment</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Recency</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Frequency</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Monetary</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">RFM Score</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="personasTable" class="divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                    Load customer data to see personas
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let customerData = [];
+        let rfmData = [];
+        let clusterData = [];
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDashboard();
+            setupEventListeners();
+            loadSampleData();
+        });
+
+        function initializeDashboard() {
+            // Initialize charts with placeholder data
+            createPlaceholderCharts();
+            // Initialize all charts immediately with a small delay
+            setTimeout(() => {
+                forceRenderAllCharts();
+            }, 1000);
+        }
+
+        function forceRenderAllCharts() {
+            console.log('Rendering all charts...');
+            try {
+                createRFMChart();
+                console.log('RFM Chart rendered');
+            } catch (e) {
+                console.error('RFM Chart error:', e);
+            }
+            
+            try {
+                createPCAChart();
+                console.log('PCA Chart rendered');
+            } catch (e) {
+                console.error('PCA Chart error:', e);
+            }
+            
+            try {
+                createSilhouetteChart();
+                console.log('Silhouette Chart rendered');
+            } catch (e) {
+                console.error('Silhouette Chart error:', e);
+            }
+            
+            try {
+                createElbowChart();
+                console.log('Elbow Chart rendered');
+            } catch (e) {
+                console.error('Elbow Chart error:', e);
+            }
+            
+            try {
+                createHeatmapChart();
+                console.log('Heatmap Chart rendered');
+            } catch (e) {
+                console.error('Heatmap Chart error:', e);
+            }
+            
+            try {
+                createSegmentsChart();
+                console.log('Segments Chart rendered');
+            } catch (e) {
+                console.error('Segments Chart error:', e);
+            }
+        }
+
+        function setupEventListeners() {
+            // File upload
+            document.getElementById('loadData').addEventListener('click', loadCustomerData);
+            document.getElementById('csvFile').addEventListener('change', handleFileSelect);
+
+            // RFM calculation
+            document.getElementById('calculateRFM').addEventListener('click', calculateRFM);
+
+            // Clustering
+            document.getElementById('runClustering').addEventListener('click', runClustering);
+            
+            // Refresh charts
+            document.getElementById('refreshCharts').addEventListener('click', function() {
+                forceRenderAllCharts();
+            });
+            
+            // Load all charts
+            document.getElementById('loadAllCharts').addEventListener('click', function() {
+                forceRenderAllCharts();
+            });
+
+            // Filters
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('filter-active'));
+                    this.classList.add('filter-active');
+                    applyFilter(this.dataset.filter);
+                });
+            });
+
+            // Sidebar toggle
+            document.getElementById('toggleSidebar').addEventListener('click', toggleSidebar);
+
+            // Export
+            document.getElementById('exportBtn').addEventListener('click', exportReport);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                console.log('File selected:', file.name);
+            }
+        }
+
+        function loadCustomerData() {
+            const fileInput = document.getElementById('csvFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a CSV file first');
+                return;
+            }
+
+            showLoading();
+            
+            Papa.parse(file, {
+                header: true,
+                complete: function(results) {
+                    customerData = results.data;
+                    updateDataInfo(customerData.length, Object.keys(customerData[0] || {}).length);
+                    calculateRFM();
+                    hideLoading();
+                },
+                error: function(error) {
+                    console.error('Error parsing CSV:', error);
+                    alert('Error loading CSV file');
+                    hideLoading();
+                }
+            });
+        }
+
+        function loadSampleData() {
+            // Generate sample customer data
+            customerData = generateSampleData(100);
+            updateDataInfo(customerData.length, 6);
+            calculateRFM();
+            // Ensure all charts are created after data load
+            setTimeout(() => {
+                createRFMChart();
+                createPCAChart();
+                createSilhouetteChart();
+                createElbowChart();
+                createHeatmapChart();
+            }, 100);
+        }
+
+        function generateSampleData(count) {
+            const data = [];
+            for (let i = 1; i <= count; i++) {
+                data.push({
+                    customer_id: i,
+                    last_purchase_days: Math.floor(Math.random() * 365),
+                    total_orders: Math.floor(Math.random() * 50) + 1,
+                    total_spent: Math.floor(Math.random() * 50000) + 500, // Indian e-commerce values in rupees
+                    avg_order_value: Math.floor(Math.random() * 2000) + 250,
+                    days_since_first_purchase: Math.floor(Math.random() * 1000) + 1
+                });
+            }
+            return data;
+        }
+
+        function updateDataInfo(rowCount, columnCount) {
+            document.getElementById('rowCount').textContent = rowCount;
+            document.getElementById('columnCount').textContent = columnCount;
+            document.getElementById('dataInfo').classList.remove('hidden');
+        }
+
+        function calculateRFM() {
+            if (customerData.length === 0) return;
+
+            showLoading();
+            
+            // Calculate RFM scores
+            rfmData = customerData.map(customer => {
+                const recency = Math.max(0, 365 - customer.last_purchase_days);
+                const frequency = customer.total_orders;
+                const monetary = customer.total_spent;
+
+                // Normalize scores (1-5 scale)
+                const rScore = Math.min(5, Math.max(1, Math.ceil(recency / 73))); // 5 levels
+                const fScore = Math.min(5, Math.max(1, Math.ceil(frequency / 10))); // 5 levels
+                const mScore = Math.min(5, Math.max(1, Math.ceil(monetary / 400))); // 5 levels
+
+                return {
+                    ...customer,
+                    r_score: rScore,
+                    f_score: fScore,
+                    m_score: mScore,
+                    rfm_score: `${rScore}${fScore}${mScore}`,
+                    segment: getSegment(rScore, fScore, mScore)
+                };
+            });
+
+            updateMetrics();
+            createRFMChart();
+            updatePersonasTable();
+            hideLoading();
+        }
+
+        function getSegment(r, f, m) {
+            if (r >= 4 && f >= 4 && m >= 4) return 'Champions';
+            if (r >= 3 && f >= 3 && m >= 4) return 'Loyal Customers';
+            if (r >= 4 && f >= 2 && m >= 3) return 'Potential Loyalists';
+            if (r >= 3 && f >= 2 && m >= 2) return 'New Customers';
+            if (r >= 2 && f >= 3 && m >= 3) return 'Promising';
+            if (r >= 2 && f >= 2 && m >= 2) return 'Need Attention';
+            if (r >= 1 && f >= 2 && m >= 2) return 'About to Sleep';
+            if (r >= 1 && f >= 1 && m >= 1) return 'At Risk';
+            return 'Lost';
+        }
+
+        function updateMetrics() {
+            const total = rfmData.length;
+            const highValue = rfmData.filter(c => c.segment === 'Champions' || c.segment === 'Loyal Customers').length;
+            const atRisk = rfmData.filter(c => c.segment === 'At Risk' || c.segment === 'Lost').length;
+            const avgValue = rfmData.reduce((sum, c) => sum + c.total_spent, 0) / total;
+
+            document.getElementById('totalCustomers').textContent = total;
+            document.getElementById('highValueCustomers').textContent = highValue;
+            document.getElementById('atRiskCustomers').textContent = atRisk;
+            document.getElementById('avgCustomerValue').textContent = `₹${Math.round(avgValue).toLocaleString('en-IN')}`;
+        }
+
+        function createRFMChart() {
+            // Create realistic 3D RFM data similar to your visualization
+            const traces = [];
+            
+            // Generate data for "Occasional/Bargain" cluster (purple)
+            const occasionalData = [];
+            for (let i = 0; i < 60; i++) {
+                occasionalData.push({
+                    x: Math.random() * 0.5 + 1.0, // High recency (1.0-1.5)
+                    y: Math.random() * 1.0 - 1.5, // Low frequency (-1.5 to -0.5)
+                    z: Math.random() * 1.0 - 2.5, // Low monetary (-2.5 to -1.5)
+                    customer_id: i + 1
+                });
+            }
+            
+            // Generate data for "High-Value Champions" cluster (yellow)
+            const championsData = [];
+            for (let i = 0; i < 25; i++) {
+                championsData.push({
+                    x: Math.random() * 0.5 - 0.5, // Low recency (-0.5 to 0.0)
+                    y: Math.random() * 0.5 + 0.0, // High frequency (0.0 to 0.5)
+                    z: Math.random() * 0.5 + 0.0, // High monetary (0.0 to 0.5)
+                    customer_id: i + 61
+                });
+            }
+
+            traces.push({
+                x: occasionalData.map(d => d.x),
+                y: occasionalData.map(d => d.y),
+                z: occasionalData.map(d => d.z),
+                mode: 'markers',
+                type: 'scatter3d',
+                name: 'Occasional/Bargain',
+                marker: {
+                    size: 6,
+                    color: '#8B5CF6', // Purple
+                    opacity: 0.8
+                }
+            });
+
+            traces.push({
+                x: championsData.map(d => d.x),
+                y: championsData.map(d => d.y),
+                z: championsData.map(d => d.z),
+                mode: 'markers',
+                type: 'scatter3d',
+                name: 'High-Value Champions',
+                marker: {
+                    size: 6,
+                    color: '#F59E0B', // Yellow/Orange
+                    opacity: 0.8
+                }
+            });
+
+            const layout = {
+                title: 'Customer Clusters (3D RFM)',
+                scene: {
+                    xaxis: { 
+                        title: 'Scaled Recency',
+                        range: [-0.5, 1.5]
+                    },
+                    yaxis: { 
+                        title: 'Scaled Frequency',
+                        range: [-1.5, 0.5]
+                    },
+                    zaxis: { 
+                        title: 'Scaled Monetary',
+                        range: [-2.5, 0.5]
+                    },
+                    camera: {
+                        eye: { x: 1.5, y: 1.5, z: 1.5 }
+                    }
+                },
+                margin: { l: 0, r: 0, t: 40, b: 0 },
+                showlegend: true,
+                legend: {
+                    x: 0.8,
+                    y: 0.9
+                }
+            };
+
+            Plotly.newPlot('rfmChart', traces, layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        }
+
+        function createSegmentsChart() {
+            // Create sample segment data if no RFM data exists
+            let segmentCounts = {};
+            
+            if (rfmData.length > 0) {
+                rfmData.forEach(customer => {
+                    segmentCounts[customer.segment] = (segmentCounts[customer.segment] || 0) + 1;
+                });
+            } else {
+                // Create sample segment data
+                segmentCounts = {
+                    'Champions': 15,
+                    'Loyal Customers': 25,
+                    'Potential Loyalists': 20,
+                    'New Customers': 18,
+                    'At Risk': 12,
+                    'Lost': 10
+                };
+            }
+
+            const data = [{
+                values: Object.values(segmentCounts),
+                labels: Object.keys(segmentCounts),
+                type: 'pie',
+                marker: {
+                    colors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F']
+                },
+                textinfo: 'label+percent',
+                textposition: 'outside'
+            }];
+
+            const layout = {
+                title: 'Customer Segments Distribution',
+                margin: { t: 40, b: 0, l: 0, r: 0 },
+                showlegend: true,
+                legend: {
+                    orientation: "v",
+                    x: 1.05,
+                    y: 0.5
+                }
+            };
+
+            Plotly.newPlot('segmentsChart', data, layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        }
+
+        function runClustering() {
+            if (rfmData.length === 0) {
+                alert('Please calculate RFM scores first');
+                return;
+            }
+
+            showLoading();
+            
+            // Simulate clustering (in real implementation, this would call a backend service)
+            setTimeout(() => {
+                const numClusters = parseInt(document.getElementById('numClusters').value);
+                
+                // Generate cluster assignments
+                clusterData = rfmData.map(customer => ({
+                    ...customer,
+                    cluster: Math.floor(Math.random() * numClusters)
+                }));
+
+                createPCAChart();
+                createSilhouetteChart();
+                createElbowChart();
+                createHeatmapChart();
+                hideLoading();
+            }, 1000);
+        }
+
+        function createPCAChart() {
+            // Create PCA 2D visualization similar to your chart
+            const traces = [];
+            
+            // Generate "Occasional/Bargain" cluster data (left side, purple)
+            const occasionalData = [];
+            for (let i = 0; i < 60; i++) {
+                occasionalData.push({
+                    x: Math.random() * 0.7 - 3.2, // PCA Component 1: -3.2 to -2.5
+                    y: Math.random() * 1.1 - 0.45, // PCA Component 2: -0.45 to 0.65
+                    customer_id: i + 1
+                });
+            }
+            
+            // Generate "High-Value Champions" cluster data (right side, yellow)
+            const championsData = [];
+            for (let i = 0; i < 25; i++) {
+                championsData.push({
+                    x: Math.random() * 0.2 + 0.8, // PCA Component 1: 0.8 to 1.0
+                    y: Math.random() * 0.15 - 0.1, // PCA Component 2: -0.1 to 0.05
+                    customer_id: i + 61
+                });
+            }
+
+            traces.push({
+                x: occasionalData.map(d => d.x),
+                y: occasionalData.map(d => d.y),
+                mode: 'markers',
+                type: 'scatter',
+                name: 'Occasional/Bargain',
+                marker: {
+                    size: 8,
+                    color: '#8B5CF6', // Purple
+                    opacity: 0.8
+                }
+            });
+
+            traces.push({
+                x: championsData.map(d => d.x),
+                y: championsData.map(d => d.y),
+                mode: 'markers',
+                type: 'scatter',
+                name: 'High-Value Champions',
+                marker: {
+                    size: 8,
+                    color: '#F59E0B', // Yellow/Orange
+                    opacity: 0.8
+                }
+            });
+
+            const layout = {
+                title: 'Customer Clusters (PCA 2D)',
+                xaxis: { 
+                    title: 'PCA Component 1',
+                    range: [-3.5, 1.0],
+                    showgrid: true,
+                    gridcolor: '#E5E7EB'
+                },
+                yaxis: { 
+                    title: 'PCA Component 2',
+                    range: [-0.5, 0.7],
+                    showgrid: true,
+                    gridcolor: '#E5E7EB'
+                },
+                margin: { t: 40, b: 0, l: 0, r: 0 },
+                showlegend: true,
+                legend: {
+                    x: 0.8,
+                    y: 0.9
+                },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white'
+            };
+
+            Plotly.newPlot('pcaChart', traces, layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        }
+
+        function createSilhouetteChart() {
+            // Create Silhouette Score chart matching your visualization
+            const data = [{
+                x: [2, 3, 4, 5, 6],
+                y: [0.95, 0.875, 0.91, 0.87, 0.62],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Silhouette Score',
+                line: { color: '#2563eb', width: 3 },
+                marker: { 
+                    size: 8,
+                    color: '#2563eb'
+                }
+            }];
+
+            const layout = {
+                title: 'Silhouette Score vs. Number of Clusters',
+                xaxis: { 
+                    title: 'Number of Clusters (K)',
+                    range: [1.5, 6.5],
+                    dtick: 0.5,
+                    showgrid: true,
+                    gridcolor: '#E5E7EB'
+                },
+                yaxis: { 
+                    title: 'Silhouette Score',
+                    range: [0.6, 1.0],
+                    dtick: 0.05,
+                    showgrid: true,
+                    gridcolor: '#E5E7EB'
+                },
+                margin: { t: 40, b: 0, l: 0, r: 0 },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white'
+            };
+
+            Plotly.newPlot('silhouetteChart', data, layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        }
+
+        function updatePersonasTable() {
+            const tbody = document.getElementById('personasTable');
+            tbody.innerHTML = '';
+
+            rfmData.slice(0, 10).forEach(customer => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="px-4 py-3">${customer.customer_id}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium ${getSegmentColor(customer.segment)}">
+                            ${customer.segment}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">${customer.r_score}</td>
+                    <td class="px-4 py-3">${customer.f_score}</td>
+                    <td class="px-4 py-3">${customer.m_score}</td>
+                    <td class="px-4 py-3 font-mono">${customer.rfm_score}</td>
+                    <td class="px-4 py-3">
+                        <button class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function getSegmentColor(segment) {
+            const colors = {
+                'Champions': 'bg-green-100 text-green-800',
+                'Loyal Customers': 'bg-blue-100 text-blue-800',
+                'Potential Loyalists': 'bg-yellow-100 text-yellow-800',
+                'New Customers': 'bg-purple-100 text-purple-800',
+                'Promising': 'bg-indigo-100 text-indigo-800',
+                'Need Attention': 'bg-orange-100 text-orange-800',
+                'About to Sleep': 'bg-red-100 text-red-800',
+                'At Risk': 'bg-red-100 text-red-800',
+                'Lost': 'bg-gray-100 text-gray-800'
+            };
+            return colors[segment] || 'bg-gray-100 text-gray-800';
+        }
+
+        function applyFilter(filter) {
+            // Filter logic would go here
+            console.log('Applying filter:', filter);
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('collapsed');
+        }
+
+        function exportReport() {
+            // Export functionality
+            const data = {
+                customers: rfmData,
+                metrics: {
+                    total: rfmData.length,
+                    highValue: rfmData.filter(c => c.segment === 'Champions' || c.segment === 'Loyal Customers').length,
+                    atRisk: rfmData.filter(c => c.segment === 'At Risk' || c.segment === 'Lost').length
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'customer-persona-report.json';
+            a.click();
+        }
+
+        function createElbowChart() {
+            // Create Elbow Method chart matching your visualization
+            const data = [{
+                x: [2, 3, 4, 5, 6],
+                y: [1.45, 0.7, 0.37, 0.05, 0.03],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'WCSS (Inertia)',
+                line: { color: '#2563eb', width: 3 },
+                marker: { 
+                    size: 8,
+                    color: '#2563eb'
+                }
+            }];
+
+            const layout = {
+                title: 'WCSS vs. Number of Clusters (Elbow Method)',
+                xaxis: { 
+                    title: 'Number of Clusters (K)',
+                    range: [1.5, 6.5],
+                    dtick: 0.5,
+                    showgrid: true,
+                    gridcolor: '#E5E7EB'
+                },
+                yaxis: { 
+                    title: 'WCSS (Inertia)',
+                    range: [0, 1.5],
+                    dtick: 0.2,
+                    showgrid: true,
+                    gridcolor: '#E5E7EB'
+                },
+                margin: { t: 40, b: 0, l: 0, r: 0 },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white'
+            };
+
+            Plotly.newPlot('elbowChart', data, layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        }
+
+        function createHeatmapChart() {
+            // Create RFM Score Heatmap
+            const rfmScores = ['111', '112', '113', '114', '115',
+                              '121', '122', '123', '124', '125',
+                              '131', '132', '133', '134', '135',
+                              '141', '142', '143', '144', '145',
+                              '151', '152', '153', '154', '155'];
+            
+            const heatmapData = [];
+            for (let r = 1; r <= 5; r++) {
+                const row = [];
+                for (let f = 1; f <= 5; f++) {
+                    // Generate random counts for each RFM combination
+                    const count = Math.floor(Math.random() * 20) + 1;
+                    row.push(count);
+                }
+                heatmapData.push(row);
+            }
+
+            const data = [{
+                z: heatmapData,
+                type: 'heatmap',
+                colorscale: 'Blues',
+                showscale: true,
+                colorbar: {
+                    title: 'Customer Count'
+                }
+            }];
+
+            const layout = {
+                title: 'RFM Score Distribution Heatmap',
+                xaxis: { 
+                    title: 'Frequency Score',
+                    tickmode: 'linear',
+                    tick0: 1,
+                    dtick: 1
+                },
+                yaxis: { 
+                    title: 'Recency Score',
+                    tickmode: 'linear',
+                    tick0: 1,
+                    dtick: 1,
+                    autorange: 'reversed'
+                },
+                margin: { t: 40, b: 0, l: 0, r: 0 }
+            };
+
+            Plotly.newPlot('heatmapChart', data, layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        }
+
+        function createPlaceholderCharts() {
+            // Create placeholder charts
+            createSegmentsChart();
+        }
+
+        function showLoading() {
+            document.querySelectorAll('.loading').forEach(loading => {
+                loading.style.display = 'block';
+            });
+        }
+
+        function hideLoading() {
+            document.querySelectorAll('.loading').forEach(loading => {
+                loading.style.display = 'none';
+            });
+        }
+    </script>
+</body>
+</html>

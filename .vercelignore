@@ -1,0 +1,6 @@
+# Ignore Jupyter notebooks
+*.ipynb
+
+# Ignore React folder if not being used
+Persona With React/
+
